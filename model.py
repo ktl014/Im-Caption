@@ -21,8 +21,14 @@ class EncoderCNN(nn.Module):
             in_features = 4096
             self.model = nn.Sequential(*modules)
             self.classifier = nn.Sequential(nn.Dropout(),
-                                        nn.Linear(9216, 4096),
-                                        nn.BatchNorm1d(4096, momentum=0.01))
+                                        nn.Linear(9216, in_features),
+                                        nn.BatchNorm1d(in_features, momentum=0.01))
+            
+        elif self.architecture == 'vgg16':
+            model = models.vgg16(pretrained=True)
+            modules = list(model.children())[:-1]
+            in_features = model.classifier[0].in_features
+            self.model = nn.Sequential(*modules)
 
         elif self.architecture == 'densenet161':
             model = models.densenet161(pretrained=True)
