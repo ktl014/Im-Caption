@@ -1,6 +1,7 @@
 image_captioning/cocoapi/*
 image_captioning/models/*
 image_captioning/figs/*
+.idea/*
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

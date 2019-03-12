@@ -3,6 +3,7 @@ import nltk
 import os
 import torch
 import torch.utils.data as data
+from torchvision import transforms
 from vocabulary import Vocabulary
 from PIL import Image
 from pycocotools.coco import COCO
@@ -10,6 +11,37 @@ import numpy as np
 from tqdm import tqdm
 import random
 import json
+
+# Define a transform to pre-process the training images
+transform_train = transforms.Compose([
+    transforms.Resize(256),  # smaller edge of image resized to 256
+    transforms.RandomCrop(224),  # get 224x224 crop from random location
+    transforms.RandomHorizontalFlip(),
+    # horizontally flip image with probability=0.5
+    transforms.ToTensor(),  # convert the PIL Image to a tensor
+    transforms.Normalize((0.485, 0.456, 0.406),
+                         # normalize image for pre-trained model
+                         (0.229, 0.224, 0.225))])
+
+# Define a transform to pre-process the validation images
+transform_val = transforms.Compose([
+    transforms.Resize(256),  # smaller edge of image resized to 256
+    transforms.CenterCrop(224),  # get 224x224 crop from the center
+    transforms.ToTensor(),  # convert the PIL Image to a tensor
+    transforms.Normalize((0.485, 0.456, 0.406),
+                         # normalize image for pre-trained model
+                         (0.229, 0.224, 0.225))])
+
+# Define a transform to pre-process the testing images
+transform_test = transforms.Compose([
+    transforms.Resize(256),  # smaller edge of image resized to 256
+    transforms.CenterCrop(224),  # get 224x224 crop from the center
+    transforms.ToTensor(),  # convert the PIL Image to a tensor
+    transforms.Normalize((0.485, 0.456, 0.406),
+                         # normalize image for pre-trained model
+                         (0.229, 0.224, 0.225))])
+
+transform = {'train': transform_train, 'val': transform_val, 'test': transform_test}
 
 def get_loader(transform,
                mode="train",

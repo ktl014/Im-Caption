@@ -1,5 +1,6 @@
 import torch
 import torch.utils.data as data
+import math
 import matplotlib.pyplot as plt
 import numpy as np
 import sys
@@ -269,3 +270,56 @@ def get_prediction(data_loader, encoder, decoder, vocab):
     for output in outputs[:num_sents]:
         sentence = clean_sentence(output, vocab)
         print (sentence)
+
+
+def vis_training(train_points, val_points, num_epochs=0, loss=True, **kwargs):
+    """ Visualize losses and accuracies w.r.t each epoch
+    Args:
+        num_epochs: (int) Number of epochs
+        train_points: (list) Points of the training curve
+        val_points: (list) Points of the validation curve
+        loss: (bool) Flag for loss or accuracy. Defaulted to True for loss
+    """
+
+    # Check if nan values in data points
+    train_points = [i for i in train_points if not math.isnan(i)]
+    val_points = [i for i in val_points if not math.isnan(i)]
+    num_epochs = len(train_points)
+    x = np.arange(0, num_epochs)
+
+    plt.plot(x, train_points, 'b')
+    plt.plot(x, val_points, 'r')
+
+    title = '{} vs Number of Epochs'.format('Loss' if loss else 'Accuracy')
+    if 'EXP' in kwargs:
+        title += ' (EXP: {})'.format(kwargs['EXP'])
+    plt.title(title)
+
+    if loss:
+        plt.ylabel('Cross Entropy Loss')
+    else:
+        plt.ylabel('Accuracy')
+
+    plt.gca().legend(('Train', 'Val'))
+    plt.xlabel('Number of Epochs')
+
+    if not os.path.exists('figs'):
+        os.makedirs('figs')
+
+    save_path = './figs/train_val_{}'.format('loss' if loss else 'accuracy')
+    for k_, v_ in kwargs.items():
+        save_path += '_%s' % v_
+    save_path += '.png'
+
+    plt.savefig(save_path)
+    plt.show()
+
+def set_cuda():
+    """Set computing device to available cuda devices"""
+    use_cuda = torch.cuda.is_available()
+    if use_cuda:
+        computing_device = torch.device("cuda")
+        print("CUDA is supported")
+    else:
+        computing_device = torch.device("cpu")
+    return computing_device
