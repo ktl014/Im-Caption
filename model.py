@@ -13,11 +13,22 @@ class EncoderCNN(nn.Module):
             in_features = model.fc.in_features
             modules = list(model.children())[:-1] 
             self.model = nn.Sequential(*modules)
+
+        elif architecture == 'alexnet':
+            model = models.alexnet(pretrained=True)
+            modules = list(model.children())[:-1]
+            in_features = 4096
+            self.model = nn.Sequential(*modules,
+                                       nn.Linear(9216, in_features),
+                                       nn.BatchNorm1d(in_features, momentum=0.01),
+                                       nn.ReLU(inplace=True))
+
         elif architecture == 'densenet161':
             model = models.densenet161(pretrained=True)
             in_features = model.classifier.in_features
             modules = list(model.children())[:-1] 
             self.model = nn.Sequential(*modules, nn.AvgPool2d(kernel_size=7, stride=1, padding=0))
+
         self.embed = nn.Linear(in_features, embed_size)
         self.bn = nn.BatchNorm1d(embed_size, momentum=0.01)
 

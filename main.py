@@ -3,18 +3,12 @@
 # Standard dist imports
 import math
 import os
-import requests
-import sys
 import time
 
 # Third party imports
 import numpy as np
-from pycocotools.coco import COCO
 import torch
 import torch.nn as nn
-from torch.autograd import Variable
-from torchvision import transforms
-import torch.utils.data as data
 
 # Project level imports
 from utils import train, validate, save_epoch, early_stopping, set_cuda, \
@@ -24,8 +18,9 @@ from model import EncoderCNN, DecoderRNN
 
 # Module level constants
 MODE = 'train'
+CNN_ARCH = 'resnet50'
 MODEL_DIR = './models/test-model'
-RESUME = 'path/of/model/to/load'
+RESUME = None
 
 # Check if mode is specified correctly
 assert MODE in ['train', 'eval', 'deploy']
@@ -80,8 +75,7 @@ def main():
         vocab_size = len(vocab)
 
     # Initialize the encoder and decoder
-    encoder = EncoderCNN(embed_size, architecture='resnet50')
-    # encoder = EncoderCNN(embed_size, architecture='densenet161')
+    encoder = EncoderCNN(embed_size, architecture=CNN_ARCH)
     decoder = DecoderRNN(embed_size, hidden_size, vocab_size)
 
     # Move models to GPU if CUDA is available
