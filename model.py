@@ -8,22 +8,23 @@ class EncoderCNN(nn.Module):
     def __init__(self, embed_size, architecture='resnet50'):
         """Load the pretrained ResNet-50 and replace top fc layer."""
         super(EncoderCNN, self).__init__()
-        if architecture == 'resnet50':
+        self.architecture = architecture
+        if self.architecture == 'resnet50':
             model = models.resnet50(pretrained=True)
             in_features = model.fc.in_features
             modules = list(model.children())[:-1] 
             self.model = nn.Sequential(*modules)
 
-        elif architecture == 'alexnet':
+        elif self.architecture == 'alexnet':
             model = models.alexnet(pretrained=True)
             modules = list(model.children())[:-1]
             in_features = 4096
-            self.model = nn.Sequential(*modules,
-                                       nn.Linear(9216, in_features),
-                                       nn.BatchNorm1d(in_features, momentum=0.01),
-                                       nn.ReLU(inplace=True))
+            self.model = nn.Sequential(*modules)
+            self.classifier = nn.Sequential(nn.Dropout(),
+                                        nn.Linear(9216, 4096),
+                                        nn.BatchNorm1d(4096, momentum=0.01))
 
-        elif architecture == 'densenet161':
+        elif self.architecture == 'densenet161':
             model = models.densenet161(pretrained=True)
             in_features = model.classifier.in_features
             modules = list(model.children())[:-1] 
@@ -37,6 +38,8 @@ class EncoderCNN(nn.Module):
         with torch.no_grad():
             features = self.model(images)
         features = features.view(features.size(0), -1)
+        if self.architecture == "alexnet":
+            features = self.classifier(features)
         features = self.embed(features)
         features = self.bn(features)
         return features
