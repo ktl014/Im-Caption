@@ -38,8 +38,6 @@ def main():
     num_epochs = 10  # number of training epochs
     lr = 0.001 # learning rate
     estop_threshold = 3 # early stop threshold
-    start_epoch = 0 # starting epoch
-    start_loss = 0 # starting loss
 
     # Build data loader, applying the transforms
     if MODE == 'train':
@@ -96,24 +94,27 @@ def main():
     # Define the optimizer
     optimizer = torch.optim.Adam(params=params, lr=lr)
 
+    # Keep track of train and validation losses and validation Bleu-4 scores by epoch
+    start_epoch = 1
+    train_losses = []
+    val_losses = []
+    val_bleus = []
+    # Keep track of the current best validation Bleu score
+    best_val_bleu = float("-INF")
+
     # Resume from a checkpoint
     if RESUME or MODE != 'train':
         fn = RESUME if RESUME else MODEL_DIR + '/best-model.pkl'
-        encoder, decoder, optimizer,\
-        start_loss, start_epoch = load_checkpoint(encoder, decoder,
-                                                  optimizer, MODE, fn)
+        encoder, decoder, optimizer, \
+        train_losses, val_losses, val_bleus, \
+        best_val_bleu, epoch = load_epoch(encoder, decoder, optimizer, fn)
 
     #========================== Train Network ================================#
     # Keep track of train and validation losses and validation Bleu-4 scores by epoch
     if MODE == 'train':
-        train_losses = []
-        val_losses = []
-        val_bleus = []
-        # Keep track of the current best validation Bleu score
-        best_val_bleu = float("-INF")
 
         start_time = time.time()
-        for epoch in range(start_epoch, start_epoch + num_epochs):
+        for epoch in range(start_epoch, start_epoch + num_epochs + 1):
             train_loss = train(train_loader, encoder, decoder, criterion,
                                optimizer, vocab_size, epoch,
                                total_train_step, start_loss=start_loss)
