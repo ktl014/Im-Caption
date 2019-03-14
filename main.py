@@ -12,7 +12,7 @@ import torch.nn as nn
 
 # Project level imports
 from utils import train, validate, save_epoch, early_stopping, set_cuda, \
-    clean_sentence, get_prediction
+    clean_sentence, get_prediction, load_checkpoint
 from data_loader import get_loader, transform
 from model import EncoderCNN, DecoderRNN
 
@@ -38,6 +38,8 @@ def main():
     num_epochs = 10  # number of training epochs
     lr = 0.001 # learning rate
     estop_threshold = 3 # early stop threshold
+    start_epoch = 0 # starting epoch
+    start_loss = 0 # starting loss
 
     # Build data loader, applying the transforms
     if MODE == 'train':
@@ -97,11 +99,9 @@ def main():
     # Resume from a checkpoint
     if RESUME or MODE != 'train':
         fn = RESUME if RESUME else MODEL_DIR + '/best-model.pkl'
-        checkpoint = torch.load(fn)
-
-        # Load pre-trained weights
-        encoder.load_state_dict(checkpoint['encoder'])
-        decoder.load_state_dict(checkpoint['decoder'])
+        encoder, decoder, optimizer,\
+        start_loss, start_epoch = load_checkpoint(encoder, decoder,
+                                                  optimizer, MODE, fn)
 
     #========================== Train Network ================================#
     # Keep track of train and validation losses and validation Bleu-4 scores by epoch
@@ -113,10 +113,10 @@ def main():
         best_val_bleu = float("-INF")
 
         start_time = time.time()
-        for epoch in range(1, num_epochs + 1):
+        for epoch in range(start_epoch, start_epoch + num_epochs):
             train_loss = train(train_loader, encoder, decoder, criterion,
-                               optimizer,
-                               vocab_size, epoch, total_train_step)
+                               optimizer, vocab_size, epoch,
+                               total_train_step, start_loss=start_loss)
             train_losses.append(train_loss)
             val_loss, val_bleu = validate(val_loader, encoder, decoder, criterion,
                                           train_loader.dataset.vocab, epoch,

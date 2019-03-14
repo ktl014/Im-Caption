@@ -183,6 +183,26 @@ def save_val_checkpoint(filename, encoder, decoder, total_loss,
                 "val_step": val_step,
                }, filename)
 
+def load_checkpoint(encoder, decoder, optimizer, mode, filename):
+    """Load checkpoint"""
+    if os.path.isfile(filename):
+        print("=> loading checkpoint '{}'".format(filename))
+        # Load checkooint
+        checkpoint = torch.load(filename)
+        # Retrieve checkpoint states
+        start_epoch = checkpoint['epoch']
+        total_loss = checkpoint['total_loss']
+        encoder.load_state_dict(checkpoint['encoder'])
+        decoder.load_state_dict(checkpoint['decoder'])
+        optimizer.load_state_dict(checkpoint['optimizer'])
+        print("=> loaded checkpoint '{}' (epoch {})"
+              .format(filename, checkpoint['epoch']))
+
+        return encoder, decoder, optimizer, total_loss, start_epoch
+
+    else:
+        print("=> no checkpoint found at '{}'".format(filename))
+
 def save_epoch(filename, encoder, decoder, optimizer, train_losses, val_losses, 
                val_bleu, val_bleus, epoch):
     """Save at the end of an epoch. Save the model's weights along with the 
