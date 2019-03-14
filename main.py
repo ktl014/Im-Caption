@@ -12,7 +12,7 @@ import torch.nn as nn
 
 # Project level imports
 from utils import train, validate, save_epoch, early_stopping, set_cuda, \
-    clean_sentence, get_prediction, load_checkpoint
+    clean_sentence, get_prediction, load_epoch, vis_training
 from data_loader import get_loader, transform
 from model import EncoderCNN, DecoderRNN
 
@@ -149,6 +149,8 @@ def main():
                 if early_stopping(val_bleus, estop_threshold):
                     break
             start_time = time.time()
+            
+            vis_training(train_losses, val_losses, loss=True, cnn_arch=CNN_ARCH)
 
     # ======================== Evaluate Network ==============================#
     elif MODE == 'eval':
