@@ -12,7 +12,7 @@ import torch.nn as nn
 
 # Project level imports
 from utils import train, validate, save_epoch, early_stopping, set_cuda, \
-    clean_sentence, get_prediction
+    clean_sentence, get_prediction, load_epoch, vis_training
 from data_loader import get_loader, transform
 from model import EncoderCNN, DecoderRNN
 
@@ -94,29 +94,30 @@ def main():
     # Define the optimizer
     optimizer = torch.optim.Adam(params=params, lr=lr)
 
+    # Keep track of train and validation losses and validation Bleu-4 scores by epoch
+    start_epoch = 1
+    train_losses = []
+    val_losses = []
+    val_bleus = []
+    # Keep track of the current best validation Bleu score
+    best_val_bleu = float("-INF")
+
     # Resume from a checkpoint
     if RESUME or MODE != 'train':
         fn = RESUME if RESUME else MODEL_DIR + '/best-model.pkl'
-        checkpoint = torch.load(fn)
-
-        # Load pre-trained weights
-        encoder.load_state_dict(checkpoint['encoder'])
-        decoder.load_state_dict(checkpoint['decoder'])
+        encoder, decoder, optimizer, \
+        train_losses, val_losses, val_bleus, \
+        best_val_bleu, epoch = load_epoch(encoder, decoder, optimizer, fn)
 
     #========================== Train Network ================================#
     # Keep track of train and validation losses and validation Bleu-4 scores by epoch
     if MODE == 'train':
-        train_losses = []
-        val_losses = []
-        val_bleus = []
-        # Keep track of the current best validation Bleu score
-        best_val_bleu = float("-INF")
 
         start_time = time.time()
-        for epoch in range(1, num_epochs + 1):
+        for epoch in range(start_epoch, start_epoch + num_epochs):
             train_loss = train(train_loader, encoder, decoder, criterion,
-                               optimizer,
-                               vocab_size, epoch, total_train_step)
+                               optimizer, vocab_size, epoch,
+                               total_train_step, start_loss=start_loss)
             train_losses.append(train_loss)
             val_loss, val_bleu = validate(val_loader, encoder, decoder, criterion,
                                           train_loader.dataset.vocab, epoch,
@@ -142,12 +143,14 @@ def main():
                        val_losses,
                        val_bleu, val_bleus, epoch)
             print("Epoch [%d/%d] took %ds" % (
-            epoch, num_epochs, time.time() - start_time))
+            epoch, start_epoch + num_epochs, time.time() - start_time))
             if epoch > 5:
                 # Stop if the validation Bleu doesn't improve for 3 epochs
                 if early_stopping(val_bleus, estop_threshold):
                     break
             start_time = time.time()
+            
+            vis_training(train_losses, val_losses, loss=True, cnn_arch=CNN_ARCH)
 
     # ======================== Evaluate Network ==============================#
     elif MODE == 'eval':

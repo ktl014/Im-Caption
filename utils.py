@@ -11,6 +11,7 @@ from nltk.translate.bleu_score import sentence_bleu, SmoothingFunction
 # Determine how often to print the batch loss while training/validating. 
 # We set this at `100` to avoid clogging the notebook.
 PRINT_EVERY = 100
+MODEL_DIR = './models'
 
 def train(train_loader, encoder, decoder, criterion, optimizer, vocab_size,
           epoch, total_step, start_step=1, start_loss=0.0):
@@ -70,7 +71,7 @@ def train(train_loader, encoder, decoder, criterion, optimizer, vocab_size,
         # Print training stats (on different line), reset time and save checkpoint
         if i_step % PRINT_EVERY == 0:
             print("\r" + stats)
-            filename = os.path.join("./models", "train-model-{}{}.pkl".format(epoch, i_step))
+            filename = os.path.join(MODEL_DIR, "train-model-{}{}.pkl".format(epoch, i_step))
             save_checkpoint(filename, encoder, decoder, optimizer, total_loss, epoch, i_step)
             start_train_time = time.time()
             
@@ -154,7 +155,7 @@ def validate(val_loader, encoder, decoder, criterion, vocab, epoch,
             # Print validation statistics (on different line) and reset time
             if i_step % PRINT_EVERY == 0:
                 print("\r" + stats)
-                filename = os.path.join("./models", "val-model-{}{}.pkl".format(epoch, i_step))
+                filename = os.path.join(MODEL_DIR, "val-model-{}{}.pkl".format(epoch, i_step))
                 save_val_checkpoint(filename, encoder, decoder, total_loss, total_bleu_4, epoch, i_step)
                 start_val_time = time.time()
                 
@@ -182,6 +183,29 @@ def save_val_checkpoint(filename, encoder, decoder, total_loss,
                 "epoch": epoch,
                 "val_step": val_step,
                }, filename)
+
+def load_epoch(encoder, decoder, optimizer, filename):
+    """Load epoch checkpoint"""
+    if os.path.isfile(filename):
+        print("=> loading checkpoint '{}'".format(filename))
+        # Load checkooint
+        checkpoint = torch.load(filename)
+        # Retrieve checkpoint states
+        epoch = checkpoint['epoch']
+        train_losses = checkpoint['train_losses']
+        val_losses = checkpoint['val_losses']
+        val_bleus = checkpoint['val_bleus']
+        best_val_bleu = checkpoint['val_bleu']
+        encoder.load_state_dict(checkpoint['encoder'])
+        decoder.load_state_dict(checkpoint['decoder'])
+        optimizer.load_state_dict(checkpoint['optimizer'])
+        print("=> loaded checkpoint '{}' (epoch {})"
+              .format(filename, checkpoint['epoch']))
+
+        return encoder, decoder, optimizer, train_losses, val_losses, val_bleus, best_val_bleu, epoch
+
+    else:
+        print("=> no checkpoint found at '{}'".format(filename))
 
 def save_epoch(filename, encoder, decoder, optimizer, train_losses, val_losses, 
                val_bleu, val_bleus, epoch):
@@ -272,7 +296,7 @@ def get_prediction(data_loader, encoder, decoder, vocab):
         print (sentence)
 
 
-def vis_training(train_points, val_points, num_epochs=0, loss=True, **kwargs):
+def vis_training(train_points, val_points, num_epochs=0, loss=True, show=False, **kwargs):
     """ Visualize losses and accuracies w.r.t each epoch
     Args:
         num_epochs: (int) Number of epochs
@@ -312,7 +336,8 @@ def vis_training(train_points, val_points, num_epochs=0, loss=True, **kwargs):
     save_path += '.png'
 
     plt.savefig(save_path)
-    plt.show()
+    if show:
+        plt.show()
 
 def set_cuda():
     """Set computing device to available cuda devices"""
