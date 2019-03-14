@@ -114,7 +114,7 @@ def main():
     if MODE == 'train':
 
         start_time = time.time()
-        for epoch in range(start_epoch, start_epoch + num_epochs + 1):
+        for epoch in range(start_epoch, start_epoch + num_epochs):
             train_loss = train(train_loader, encoder, decoder, criterion,
                                optimizer, vocab_size, epoch,
                                total_train_step, start_loss=start_loss)
@@ -143,7 +143,7 @@ def main():
                        val_losses,
                        val_bleu, val_bleus, epoch)
             print("Epoch [%d/%d] took %ds" % (
-            epoch, num_epochs, time.time() - start_time))
+            epoch, start_epoch + num_epochs, time.time() - start_time))
             if epoch > 5:
                 # Stop if the validation Bleu doesn't improve for 3 epochs
                 if early_stopping(val_bleus, estop_threshold):
