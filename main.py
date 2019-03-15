@@ -96,6 +96,7 @@ def main():
 
     # Keep track of train and validation losses and validation Bleu-4 scores by epoch
     start_epoch = 1
+    start_loss = 0.0
     train_losses = []
     val_losses = []
     val_bleus = []
