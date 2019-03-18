@@ -33,8 +33,11 @@ class Encoder(nn.Module):
         :return: encoded images
         """
         out = self.resnet(images)  # (batch_size, 2048, image_size/32, image_size/32)
+        print('out: {}'.format(out.shape))
         out = self.adaptive_pool(out)  # (batch_size, 2048, encoded_image_size, encoded_image_size)
+        print(out.shape)
         out = out.permute(0, 2, 3, 1)  # (batch_size, encoded_image_size, encoded_image_size, 2048)
+        print(out.shape)
         return out
 
     def fine_tune(self, fine_tune=True):
@@ -165,7 +168,12 @@ class DecoderWithAttention(nn.Module):
         :param encoder_out: encoded images, a tensor of dimension (batch_size, enc_image_size, enc_image_size, encoder_dim)
         :param encoded_captions: encoded captions, a tensor of dimension (batch_size, max_caption_length)
         :param caption_lengths: caption lengths, a tensor of dimension (batch_size, 1)
-        :return: scores for vocabulary, sorted encoded captions, decode lengths, weights, sort indices
+        :return:
+            scores: scores for vocabulary (batch_size, 15, 9490)
+            caps_sorted: sorted encoded captions (batch_size, 52)
+            decode_lengths: (list) decode lengths
+            alphas: weights (batch_size, 15, 196)
+            sort_ind: sorted indices (batch_size)
         """
 
         batch_size = encoder_out.size(0)
@@ -213,9 +221,11 @@ class DecoderWithAttention(nn.Module):
 
         return predictions, encoded_captions, decode_lengths, alphas, sort_ind
 
+
 if __name__ == '__main__':
     import os
     import json
+    import pickle
 
     # Data parameters
     data_folder = 'data'  # folder with data files saved by create_input_files.py
@@ -238,3 +248,13 @@ if __name__ == '__main__':
                                        decoder_dim=decoder_dim,
                                        vocab_size=len(word_map),
                                        dropout=dropout)
+
+    f = open(os.path.join(data_folder, 'sample-input.pkl'), 'rb')
+    sample_input = pickle.load(f)
+    imgs, caps, caplens = sample_input[0], sample_input[1], sample_input[2]
+
+    # Forward propagate
+    imgs = encoder(imgs)
+    scores, caps_sorted, decode_lengths, alphas, sort_ind = decoder(imgs, caps,
+                                                                    caplens)
+
