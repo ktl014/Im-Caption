@@ -3,16 +3,17 @@ import torch.nn as nn
 import torchvision.models as models
 from torch.nn import functional as F
 
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 class EncoderCNN(nn.Module):
-    def __init__(self, embed_size, architecture='resnet50'):
+    def __init__(self, embed_size=256, architecture='resnet50'):
         """Load the pretrained ResNet-50 and replace top fc layer."""
         super(EncoderCNN, self).__init__()
         self.architecture = architecture
         if self.architecture == 'resnet50':
             model = models.resnet50(pretrained=True)
             in_features = model.fc.in_features
-            modules = list(model.children())[:-1]
+            modules = list(model.children())[:-2] #####MARKER
             self.model = nn.Sequential(*modules)
 
         elif self.architecture == 'alexnet':
@@ -44,18 +45,20 @@ class EncoderCNN(nn.Module):
         with torch.no_grad():
             features = self.model(images)
         print(features.shape)
-        features = features.view(features.size(0), -1)
-        if self.architecture == "alexnet":
-            features = self.classifier(features)
-        features = self.embed(features)
-        print(features.shape)
-        features = self.bn(features)
-        print(features.shape)
+
+        #####MARKER
+        # features = features.view(features.size(0), -1)
+        # if self.architecture == "alexnet":
+        #     features = self.classifier(features)
+        # features = self.embed(features)
+        # print(features.shape)
+        # features = self.bn(features)
+        # print(features.shape)
         return features
 
 
 class DecoderRNN(nn.Module):
-    def __init__(self, embed_size, hidden_size, vocab_size, num_layers=1):
+    def __init__(self, vocab_size, embed_size=256, hidden_size=512, num_layers=1):
         """Set the hyper-parameters and build the layers."""
         super(DecoderRNN, self).__init__()
         self.embed = nn.Embedding(vocab_size, embed_size)
@@ -160,7 +163,8 @@ class DecoderWithAttention(nn.Module):
     Decoder.
     """
 
-    def __init__(self, attention_dim, embed_dim, decoder_dim, vocab_size, encoder_dim=2048, dropout=0.5):
+    def __init__(self, vocab_size, attention_dim=512, embed_dim=512,
+                 decoder_dim=512, encoder_dim=2048, dropout=0.5):
         """
         :param attention_dim: size of attention network
         :param embed_dim: embedding size
@@ -241,6 +245,7 @@ class DecoderWithAttention(nn.Module):
             alphas: weights (batch_size, 15, 196)
             sort_ind: sorted indices (batch_size)
         """
+        encoder_out = encoder_out.permute(0, 2, 3, 1)
 
         batch_size = encoder_out.size(0)
         encoder_dim = encoder_out.size(-1)
@@ -251,7 +256,8 @@ class DecoderWithAttention(nn.Module):
         num_pixels = encoder_out.size(1)
 
         # Sort input data by decreasing lengths; why? apparent below
-        caption_lengths, sort_ind = caption_lengths.squeeze(1).sort(dim=0, descending=True)
+        caption_lengths, sort_ind = caption_lengths.squeeze(0).sort(dim=0,
+                                                                    descending=True)
         encoder_out = encoder_out[sort_ind]
         encoded_captions = encoded_captions[sort_ind]
 
@@ -290,10 +296,28 @@ class DecoderWithAttention(nn.Module):
 
 
 if __name__ == '__main__':
-    embed_size = 256
+    import json
+    import os
+    import pickle
 
-    inp = torch.rand(32, 3, 224, 224)
-    encoder = EncoderCNN(embed_size)
-    features = encoder(inp)
+    # Data parameters
+    data_folder = 'data'  # folder with data files saved by create_input_files.py
+    data_name = 'coco_5_cap_per_img_5_min_word_freq'  # base name shared by data files
+
+    f = open(os.path.join(data_folder, 'sample-input_curr-model.pkl'), 'rb')
+    sample_input = pickle.load(f)
+    img, caps, vocab_size, capslens = sample_input[0], sample_input[1], \
+                               sample_input[2], sample_input[3]
+
+    encoder = EncoderCNN()
+    decoder = DecoderRNN(vocab_size)
+    decoder_attention = DecoderWithAttention(vocab_size=vocab_size)
+
+    img = encoder(img)
+    # outputs = decoder(features, caps)
+
+    scores, caps_sorted, decode_lengths, alphas, sort_ind = decoder_attention(
+        img, caps, capslens)
+
 
     
