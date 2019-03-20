@@ -248,7 +248,7 @@ class DecoderWithAttention(nn.Module):
         c = self.init_c(mean_encoder_out)
         return h, c
 
-    def forward(self, encoder_out, encoded_captions, caption_lengths):
+    def forward(self, encoder_out, encoded_captions):
         """
         Forward propagation.
 
@@ -273,14 +273,18 @@ class DecoderWithAttention(nn.Module):
         num_pixels = encoder_out.size(1)
 
         # Sort input data by decreasing lengths; why? apparent below
-        caption_lengths, sort_ind = caption_lengths.squeeze(1).sort(dim=0,
-                                                                    descending=True)
+        # caption_lengths, sort_ind = caption_lengths.squeeze(1).sort(dim=0,
+        #                                                             descending=True)
+        '''
+        caption_lengths = caption_lengths+2
+        caption_lengths, sort_ind = caption_lengths.sort(dim=0,
+                                                         descending=True)
         assert isinstance(caption_lengths[0].item(), int) # change squeeze dim if receiving errors
 
 
         encoder_out = encoder_out[sort_ind]
         encoded_captions = encoded_captions[sort_ind]
-
+        '''
         # Embedding
         embeddings = self.embedding(encoded_captions)  # (batch_size, max_caption_length, embed_dim)
 
@@ -289,7 +293,8 @@ class DecoderWithAttention(nn.Module):
 
         # We won't decode at the <end> position, since we've finished generating as soon as we generate <end>
         # So, decoding lengths are actual lengths - 1
-        decode_lengths = (caption_lengths - 1).tolist()
+        #decode_lengths = (caption_lengths - 1).tolist()
+        decode_lengths = [encoded_captions.shape[1] - 1]
 
         # Create tensors to hold word predicion scores and alphas
         predictions = torch.zeros(batch_size, max(decode_lengths),
@@ -301,6 +306,7 @@ class DecoderWithAttention(nn.Module):
         # attention-weighing the encoder's output based on the decoder's previous hidden state output
         # then generate a new word in the decoder with the previous word and the attention weighted encoding
         for t in range(max(decode_lengths)):
+            '''
             batch_size_t = sum([l > t for l in decode_lengths])
             attention_weighted_encoding, alpha = self.attention(encoder_out[:batch_size_t],
                                                                 h[:batch_size_t])
@@ -312,8 +318,20 @@ class DecoderWithAttention(nn.Module):
             preds = self.fc(self.dropout(h))  # (batch_size_t, vocab_size)
             predictions[:batch_size_t, t, :] = preds
             alphas[:batch_size_t, t, :] = alpha
-
         return predictions, encoded_captions, decode_lengths, alphas, sort_ind
+            '''
+
+            attention_weighted_encoding, alpha = self.attention(encoder_out,
+                                                                h)
+            gate = self.sigmoid(self.f_beta(h))  # gating scalar, (batch_size_t, encoder_dim)
+            attention_weighted_encoding = gate * attention_weighted_encoding
+            h, c = self.decode_step(
+                torch.cat([embeddings[:, t, :], attention_weighted_encoding], dim=1),
+                (h, c))  # (batch_size_t, decoder_dim)
+            preds = self.fc(self.dropout(h))  # (batch_size_t, vocab_size)
+            predictions[:, t, :] = preds
+            alphas[:, t, :] = alpha
+        return predictions, alphas
 
 
 
@@ -343,9 +361,12 @@ if __name__ == '__main__':
     decoder_attention.to(device)
 
     img = encoder(img)
-    scores = decoder(img, caps)
-    scores, caps_sorted, decode_lengths, alphas, sort_ind = decoder_attention(
-        img, caps, capslens)
+
+    # scores = decoder(img, caps)
+    # scores, caps_sorted, decode_lengths, alphas, sort_ind = decoder_attention(
+    #     img, caps, capslens)
+    scores, alphas = decoder_attention(
+             img, caps)
 
     criterion = nn.CrossEntropyLoss().to(device)
 
@@ -355,11 +376,8 @@ if __name__ == '__main__':
     # scores --> XXX (256, 6335) ERROR HERE
 
     # targets --> (32 x 11)
-    targets = caps.view(-1)
+    targets = caps[:,1:].flatten()
     # targets --> (352)
 
     loss = criterion(scores, targets)
     print(loss)
-
-
-    

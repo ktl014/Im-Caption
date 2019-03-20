@@ -45,10 +45,18 @@ def train(train_loader, encoder, decoder, criterion, optimizer, vocab_size,
             captions = captions.cuda()
         # Pass the inputs through the CNN-RNN model
         features = encoder(images)
-        outputs = decoder(features, captions)
+
 
         # Calculate the batch loss
-        loss = criterion(outputs.view(-1, vocab_size), captions.view(-1))
+
+        if (encoder.attention == True):
+            outputs, alphas = decoder_attention(img, captions)
+            loss = criterion(outputs.view(-1, vocab_size), captions[:,1:].flatten())
+            # Add doubly stochastic attention regularization
+            loss += alpha_c * ((1. - alphas.sum(dim=1)) ** 2).mean()
+        else:
+            outputs = decoder(features, captions)
+            loss = criterion(outputs.view(-1, vocab_size), captions.view(-1))
         # Zero the gradients. Since the backward() function accumulates 
         # gradients, and we don’t want to mix up gradients between minibatches,
         # we have to zero them out at the start of a new minibatch
@@ -117,7 +125,18 @@ def validate(val_loader, encoder, decoder, criterion, vocab, epoch,
             
             # Pass the inputs through the CNN-RNN model
             features = encoder(images)
-            outputs = decoder(features, captions)
+            if (encoder.attention == True):
+                outputs, alphas = decoder(features, captions)
+                loss = criterion(outputs.view(-1, vocab_size), captions[:, 1:].flatten())
+                # Add doubly stochastic attention regularization
+                loss += alpha_c * ((1. - alphas.sum(dim=1)) ** 2).mean()
+                total_loss += loss.item()
+            else:
+                outputs = decoder(features, captions)
+                # Calculate the batch loss
+                loss = criterion(outputs.view(-1, len(vocab)), captions.view(-1))
+                total_loss += loss.item()
+
 
             # Calculate the total Bleu-4 score for the batch
             batch_bleu_4 = 0.0
@@ -138,10 +157,6 @@ def validate(val_loader, encoder, decoder, criterion, vocab, epoch,
                                                predicted_word_list, 
                                                smoothing_function=smoothing.method1)
             total_bleu_4 += batch_bleu_4 / len(outputs)
-
-            # Calculate the batch loss
-            loss = criterion(outputs.view(-1, len(vocab)), captions.view(-1))
-            total_loss += loss.item()
             
             # Get validation statistics
             stats = "Epoch %d, Val step [%d/%d], %ds, Loss: %.4f, Perplexity: %5.4f, Bleu-4: %.4f" \
