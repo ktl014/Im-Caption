@@ -57,7 +57,6 @@ class EncoderCNN(nn.Module):
         """Extract feature vectors from input images."""
         with torch.no_grad():
             features = self.model(images)
-        print(features.shape)
 
         #####MARKER
         if not self.attention:
@@ -65,9 +64,7 @@ class EncoderCNN(nn.Module):
             if self.architecture == "alexnet":
                 features = self.classifier(features)
             features = self.embed(features)
-            print(features.shape)
             features = self.bn(features)
-            print(features.shape)
         else:
             features = self.adaptive_pool(features)
 
@@ -306,20 +303,6 @@ class DecoderWithAttention(nn.Module):
         # attention-weighing the encoder's output based on the decoder's previous hidden state output
         # then generate a new word in the decoder with the previous word and the attention weighted encoding
         for t in range(max(decode_lengths)):
-            '''
-            batch_size_t = sum([l > t for l in decode_lengths])
-            attention_weighted_encoding, alpha = self.attention(encoder_out[:batch_size_t],
-                                                                h[:batch_size_t])
-            gate = self.sigmoid(self.f_beta(h[:batch_size_t]))  # gating scalar, (batch_size_t, encoder_dim)
-            attention_weighted_encoding = gate * attention_weighted_encoding
-            h, c = self.decode_step(
-                torch.cat([embeddings[:batch_size_t, t, :], attention_weighted_encoding], dim=1),
-                (h[:batch_size_t], c[:batch_size_t]))  # (batch_size_t, decoder_dim)
-            preds = self.fc(self.dropout(h))  # (batch_size_t, vocab_size)
-            predictions[:batch_size_t, t, :] = preds
-            alphas[:batch_size_t, t, :] = alpha
-        return predictions, encoded_captions, decode_lengths, alphas, sort_ind
-            '''
 
             attention_weighted_encoding, alpha = self.attention(encoder_out,
                                                                 h)
@@ -333,7 +316,23 @@ class DecoderWithAttention(nn.Module):
             alphas[:, t, :] = alpha
         return predictions, alphas
 
-
+    def sample(self, inputs, states=None, max_len=20):
+        """Accept a pre-processed image tensor (inputs) and return predicted 
+        sentence (list of tensor ids of length max_len). This is the greedy
+        search approach.
+        """
+        sampled_ids = []
+        h, c = self.init_hidden_state(inputs)  # (batch_size, decoder_dim)
+        for i in range(max_len):
+            hiddens, states = self.decoder_step(inputs, (h,c))
+            outputs = self.fc(hiddens)
+            # Get the index (in the vocabulary) of the most likely integer that
+            # represents a word
+            predicted = outputs.argmax(1)
+            sampled_ids.append(predicted.item())
+            inputs = self.embedding(predicted)
+            inputs = inputs.unsqueeze(1)
+        return sampled_ids
 
 if __name__ == '__main__':
     import json

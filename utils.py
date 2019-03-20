@@ -14,7 +14,7 @@ PRINT_EVERY = 100
 MODEL_DIR = './models'
 
 def train(train_loader, encoder, decoder, criterion, optimizer, vocab_size,
-          epoch, total_step, start_step=1, start_loss=0.0):
+          epoch, total_step, start_step=1, start_loss=0.0, alpha_c = 1.):
     """Train the model for one epoch using the provided parameters. Save 
     checkpoints every 100 steps. Return the epoch's average train loss."""
 
@@ -50,7 +50,7 @@ def train(train_loader, encoder, decoder, criterion, optimizer, vocab_size,
         # Calculate the batch loss
 
         if (encoder.attention == True):
-            outputs, alphas = decoder_attention(img, captions)
+            outputs, alphas = decoder(features, captions)
             loss = criterion(outputs.view(-1, vocab_size), captions[:,1:].flatten())
             # Add doubly stochastic attention regularization
             loss += alpha_c * ((1. - alphas.sum(dim=1)) ** 2).mean()
@@ -86,7 +86,7 @@ def train(train_loader, encoder, decoder, criterion, optimizer, vocab_size,
     return total_loss / total_step
             
 def validate(val_loader, encoder, decoder, criterion, vocab, epoch, 
-             total_step, start_step=1, start_loss=0.0, start_bleu=0.0):
+             total_step, start_step=1, start_loss=0.0, start_bleu=0.0, alpha_c = 1.):
     """Validate the model for one epoch using the provided parameters. 
     Return the epoch's average validation loss and Bleu-4 score."""
 
@@ -127,17 +127,18 @@ def validate(val_loader, encoder, decoder, criterion, vocab, epoch,
             features = encoder(images)
             if (encoder.attention == True):
                 outputs, alphas = decoder(features, captions)
-                loss = criterion(outputs.view(-1, vocab_size), captions[:, 1:].flatten())
+                loss = criterion(outputs.view(-1, len(vocab)), captions[:, 1:].flatten())
                 # Add doubly stochastic attention regularization
                 loss += alpha_c * ((1. - alphas.sum(dim=1)) ** 2).mean()
                 total_loss += loss.item()
+
+
             else:
                 outputs = decoder(features, captions)
                 # Calculate the batch loss
                 loss = criterion(outputs.view(-1, len(vocab)), captions.view(-1))
                 total_loss += loss.item()
-
-
+                
             # Calculate the total Bleu-4 score for the batch
             batch_bleu_4 = 0.0
             # Iterate over outputs. Note: outputs[i] is a caption in the batch
@@ -157,6 +158,8 @@ def validate(val_loader, encoder, decoder, criterion, vocab, epoch,
                                                predicted_word_list, 
                                                smoothing_function=smoothing.method1)
             total_bleu_4 += batch_bleu_4 / len(outputs)
+
+
             
             # Get validation statistics
             stats = "Epoch %d, Val step [%d/%d], %ds, Loss: %.4f, Perplexity: %5.4f, Bleu-4: %.4f" \
