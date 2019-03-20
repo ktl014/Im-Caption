@@ -6,14 +6,27 @@ from torch.nn import functional as F
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 class EncoderCNN(nn.Module):
-    def __init__(self, embed_size=256, architecture='resnet50'):
-        """Load the pretrained ResNet-50 and replace top fc layer."""
+    def __init__(self, embed_size=256, architecture='resnet50',
+                 attention=False, encoded_image_size=11):
+        """Load the pretrained ResNet-50 and replace top fc layer.
+        :param attention:
+        """
         super(EncoderCNN, self).__init__()
         self.architecture = architecture
+        self.attention = attention
         if self.architecture == 'resnet50':
             model = models.resnet50(pretrained=True)
             in_features = model.fc.in_features
-            modules = list(model.children())[:-2] #####MARKER
+
+            if not self.attention:
+                modules = list(model.children())[:-1] #####MARKER
+            else:
+                modules = list(model.children())[:-2]
+
+            # Resize image to fixed size to allow input images of variable size
+            self.adaptive_pool = nn.AdaptiveAvgPool2d(
+                (encoded_image_size, encoded_image_size))
+
             self.model = nn.Sequential(*modules)
 
         elif self.architecture == 'alexnet':
@@ -47,13 +60,17 @@ class EncoderCNN(nn.Module):
         print(features.shape)
 
         #####MARKER
-        # features = features.view(features.size(0), -1)
-        # if self.architecture == "alexnet":
-        #     features = self.classifier(features)
-        # features = self.embed(features)
-        # print(features.shape)
-        # features = self.bn(features)
-        # print(features.shape)
+        if not self.attention:
+            features = features.view(features.size(0), -1)
+            if self.architecture == "alexnet":
+                features = self.classifier(features)
+            features = self.embed(features)
+            print(features.shape)
+            features = self.bn(features)
+            print(features.shape)
+        else:
+            features = self.adaptive_pool(features)
+
         return features
 
 
@@ -256,8 +273,11 @@ class DecoderWithAttention(nn.Module):
         num_pixels = encoder_out.size(1)
 
         # Sort input data by decreasing lengths; why? apparent below
-        caption_lengths, sort_ind = caption_lengths.squeeze(0).sort(dim=0,
+        caption_lengths, sort_ind = caption_lengths.squeeze(1).sort(dim=0,
                                                                     descending=True)
+        assert isinstance(caption_lengths[0].item(), int) # change squeeze dim if receiving errors
+
+
         encoder_out = encoder_out[sort_ind]
         encoded_captions = encoded_captions[sort_ind]
 
@@ -272,8 +292,10 @@ class DecoderWithAttention(nn.Module):
         decode_lengths = (caption_lengths - 1).tolist()
 
         # Create tensors to hold word predicion scores and alphas
-        predictions = torch.zeros(batch_size, max(decode_lengths), vocab_size).to(device)
-        alphas = torch.zeros(batch_size, max(decode_lengths), num_pixels).to(device)
+        predictions = torch.zeros(batch_size, max(decode_lengths),
+                                  vocab_size).to(device)
+        alphas = torch.zeros(batch_size, max(decode_lengths),
+                             num_pixels).to(device)
 
         # At each time-step, decode by
         # attention-weighing the encoder's output based on the decoder's previous hidden state output
@@ -309,15 +331,35 @@ if __name__ == '__main__':
     img, caps, vocab_size, capslens = sample_input[0], sample_input[1], \
                                sample_input[2], sample_input[3]
 
-    encoder = EncoderCNN()
+    device = torch.device(
+        "cuda" if torch.cuda.is_available() else "cpu")  # sets device for model and PyTorch tensors
+
+    encoder = EncoderCNN(attention=True)
     decoder = DecoderRNN(vocab_size)
     decoder_attention = DecoderWithAttention(vocab_size=vocab_size)
 
-    img = encoder(img)
-    # outputs = decoder(features, caps)
+    encoder.to(device)
+    decoder.to(device)
+    decoder_attention.to(device)
 
+    img = encoder(img)
+    scores = decoder(img, caps)
     scores, caps_sorted, decode_lengths, alphas, sort_ind = decoder_attention(
         img, caps, capslens)
+
+    criterion = nn.CrossEntropyLoss().to(device)
+
+    # Calculate the batch loss
+    # scores --> (32, 8, 6335) enc: (batch_size, decode_length, vocab_size)
+    scores = scores.view(-1, vocab_size)
+    # scores --> XXX (256, 6335) ERROR HERE
+
+    # targets --> (32 x 11)
+    targets = caps.view(-1)
+    # targets --> (352)
+
+    loss = criterion(scores, targets)
+    print(loss)
 
 
     
