@@ -38,6 +38,8 @@ def main():
     num_epochs = 10  # number of training epochs
     lr = 0.001 # learning rate
     estop_threshold = 3 # early stop threshold
+    attention = True
+    alpha_c = 1.
 
     # Build data loader, applying the transforms
     if MODE == 'train':
@@ -75,8 +77,12 @@ def main():
         vocab_size = len(vocab)
 
     # Initialize the encoder and decoder
-    encoder = EncoderCNN(embed_size, architecture=CNN_ARCH)
-    decoder = DecoderRNN(embed_size, hidden_size, vocab_size)
+    encoder = EncoderCNN(embed_size, architecture=CNN_ARCH, attention = attention)
+    if attention == True:
+        decoder = DecoderWithAttention(vocab_size, embed_dim = embed_size, decoder_dim = hidden_size,
+                                       encoder_dim = 2048, attention_dim = 512, dropout = 0.5)
+    else:
+        decoder = DecoderRNN(embed_size, hidden_size, vocab_size)
 
     # Move models to GPU if CUDA is available
     computing_device = set_cuda()

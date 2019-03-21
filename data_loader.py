@@ -181,8 +181,11 @@ class CoCoDataset(data.Dataset):
             caption.append(self.vocab(self.vocab.end_word))
             caption = torch.Tensor(caption).long()
 
+            # Retrieve caption lengths
+            caplens = self.caption_lengths[index]
+
             # Return pre-processed image and caption tensors
-            return image, caption
+            return image, caption, caplens
 
         # Obtain image if in test mode
         else:
